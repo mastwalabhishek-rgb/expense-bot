@@ -1,20 +1,13 @@
-from flask import Flask, request
+
 from telegram import Update
-from telegram.ext import (
-    Application,
-    MessageHandler,
-    ContextTypes,
-    filters
-)
+from telegram.ext import Application, MessageHandler, ContextTypes, filters
 from datetime import datetime
-import json, os, asyncio
+import json, os
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-app = Flask(__name__)
 DATA_FILE = "data.json"
 
-# ------------------ DATA ------------------
+# ---------------- DATA ----------------
 
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -26,20 +19,19 @@ def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
-# ------------------ HANDLER ------------------
+# ---------------- HANDLER ----------------
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
-    text = update.message.text.strip()
+    text = update.message.strip()
 
     hindi_numbers = {
         "एक":1,"दो":2,"तीन":3,"चार":4,"पांच":5,
         "छह":6,"सात":7,"आठ":8,"नौ":9,"दस":10
     }
 
-    # Monthly summary
     if "खर्च" in text:
         data = load_data()
         month = datetime.now().strftime("%Y-%m")
@@ -64,34 +56,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"₹{amount} save हो गया")
 
-# ------------------ TELEGRAM APP ------------------
+# ---------------- MAIN ----------------
 
-telegram_app = Application.builder().token(BOT_TOKEN).build()
-telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-)
-
-# ------------------ FLASK WEBHOOK ------------------
-
-@app.route("/", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    asyncio.get_event_loop().create_task(
-        telegram_app.process_update(update)
-    )
-    return "ok"
-
-# ------------------ STARTUP ------------------
-
-async def startup():
-    await telegram_app.initialize()
-    await telegram_app.start()
-
-asyncio.get_event_loop().create_task(startup())
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.run_polling()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
 
-
-  
 
