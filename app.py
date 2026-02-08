@@ -1,14 +1,12 @@
 from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import Dispatcher, MessageHandler, Filters
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from datetime import datetime
-import json, os
+import json, os, asyncio
 
-TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-bot = Bot(token=TOKEN)
 app = Flask(__name__)
-
 DATA_FILE = "data.json"
 
 def load_data():
@@ -22,7 +20,10 @@ def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
-def handle_message(update, context):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
     text = update.message.text.strip()
 
     hindi_numbers = {
@@ -35,7 +36,7 @@ def handle_message(update, context):
         data = load_data()
         month = datetime.now().strftime("%Y-%m")
         total = sum(e["amount"] for e in data if e["date"].startswith(month))
-        update.message.reply_text(f"इस महीने का कुल खर्च ₹{total}")
+        await update.message.reply_text(f"इस महीने का कुल खर्च ₹{total}")
         return
 
     words = text.split()
@@ -53,13 +54,20 @@ def handle_message(update, context):
     })
     save_data(data)
 
-    update.message.reply_text(f"₹{amount} save हो गया")
+    await update.message.reply_text(f"₹{amount} save हो गया")
+
+telegram_app = Application.builder().token(BOT_TOKEN).build()
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 @app.route("/", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    asyncio.run(telegram_app.process_update(update))
     return "ok"
 
-dispatcher = Dispatcher(bot, None, workers=0)
-dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
+
+       
+
+  
