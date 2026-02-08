@@ -1,6 +1,11 @@
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
 from datetime import datetime
 import json, os, asyncio
 
@@ -9,19 +14,22 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 app = Flask(__name__)
 DATA_FILE = "data.json"
 
+# ------------------ DATA ------------------
+
 def load_data():
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except:
+    if not os.path.exists(DATA_FILE):
         return []
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
 
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
+# ------------------ HANDLER ------------------
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
+    if not update.message or not update.message.text:
         return
 
     text = update.message.text.strip()
@@ -56,18 +64,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"₹{amount} save हो गया")
 
+# ------------------ TELEGRAM APP ------------------
+
 telegram_app = Application.builder().token(BOT_TOKEN).build()
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+telegram_app.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+)
+
+# ------------------ FLASK WEBHOOK ------------------
 
 @app.route("/", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    asyncio.run(telegram_app.process_update(update))
+    asyncio.get_event_loop().create_task(
+        telegram_app.process_update(update)
+    )
     return "ok"
+
+# ------------------ STARTUP ------------------
+
+async def startup():
+    await telegram_app.initialize()
+    await telegram_app.start()
+
+asyncio.get_event_loop().create_task(startup())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
 
-       
 
   
+
